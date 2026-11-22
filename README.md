@@ -103,6 +103,10 @@ wrangler pages dev .
 
 For local API testing, create `.dev.vars` from `.dev.vars.example` and fill test credentials. `.dev.vars` is ignored by Git. For local D1, use Wrangler's D1 local binding workflow.
 
+## Before the site is fully operational
+
+The source code is included, but deployment credentials and the D1 database are account-specific and must be configured by the owner. Execute `schema.sql` in the D1 Console, bind that database as `DB`, configure all six variables/secrets listed above, and add the exact OAuth callback URL in Discord Developer Portal. Then redeploy.
+
 ## Routes
 
 - `/` — public portfolio and request form

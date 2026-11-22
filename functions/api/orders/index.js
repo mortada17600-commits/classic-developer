@@ -1,3 +1,33 @@
 import {json,getSession,notifyAdmin} from '../../_lib.js';
-export async function onRequestGet({request,env}){const user=await getSession(request,env);if(!user)return json({error:'Sign in with Discord to view your requests.'},401);const {results=[]}=await env.DB.prepare('SELECT id,service,title,budget,status,created_at FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 50').bind(user.id).all();return json({orders:results})}
-export async function onRequestPost({request,env}){const user=await getSession(request,env);if(!user)return json({error:'Sign in with Discord first.'},401);let body;try{body=await request.json()}catch{return json({error:'Invalid request body.'},400)}const service=String(body.service||'').trim(),title=String(body.title||'').trim(),details=String(body.details||'').trim(),budget=String(body.budget||'Not specified').trim();const allowed=['Discord Bot Development','Discord Server Systems','Website & API Integration','Custom Project'];if(!allowed.includes(service)||title.length<3||title.length>100||details.length<15||details.length>4000)return json({error:'Please complete all fields correctly.'},400);const now=new Date().toISOString();const result=await env.DB.prepare('INSERT INTO orders (user_id,username,service,title,details,budget,status,created_at) VALUES (?,?,?,?,?,?,?,?)').bind(user.id,user.username,service,title,details,budget,'pending',now).run();const id=result.meta.last_row_id;await notifyAdmin(env,{id,service,title,details,budget},user);return json({ok:true,id},201)}
+
+export async function onRequestGet({request,env}) {
+  const user = await getSession(request,env);
+  if (!user) return json({error:'Sign in with Discord to view your requests.'},401);
+  if (!env.DB) return json({error:'D1 is not connected. Add the DB binding in Cloudflare Pages.'},503);
+  const {results=[]} = await env.DB.prepare('SELECT id,service,title,budget,status,created_at FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 50').bind(user.id).all();
+  return json({orders:results});
+}
+
+export async function onRequestPost({request,env}) {
+  const user = await getSession(request,env);
+  if (!user) return json({error:'Sign in with Discord first.'},401);
+  const origin = request.headers.get('Origin');
+  if (origin && origin !== new URL(request.url).origin) return json({error:'Cross-origin request blocked.'},403);
+  if (!env.DB) return json({error:'D1 is not connected. Add the DB binding in Cloudflare Pages.'},503);
+  let body;
+  try { body = await request.json(); } catch { return json({error:'Invalid request body.'},400); }
+  const service = String(body.service||'').trim();
+  const title = String(body.title||'').trim();
+  const details = String(body.details||'').trim();
+  const budget = String(body.budget||'Not specified').trim().slice(0,60);
+  const allowed = ['Discord Bot Development','Discord Server Systems','Website & API Integration','Custom Project'];
+  if (!allowed.includes(service) || title.length < 3 || title.length > 100 || details.length < 15 || details.length > 4000) {
+    return json({error:'Please complete all fields correctly.'},400);
+  }
+  const now = new Date().toISOString();
+  const result = await env.DB.prepare('INSERT INTO orders (user_id,username,service,title,details,budget,status,created_at) VALUES (?,?,?,?,?,?,?,?)')
+    .bind(user.id,user.username,service,title,details,budget,'pending',now).run();
+  const id = result.meta.last_row_id;
+  await notifyAdmin(env,{id,service,title,details,budget},user);
+  return json({ok:true,id},201);
+}
